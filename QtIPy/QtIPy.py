@@ -83,28 +83,36 @@ class AutomatonDialog(GenericDialog):
     
     def __init__(self, parent, **kwargs):
         super(AutomatonDialog, self).__init__(parent, **kwargs)
-        self.setWindowTitle("Define Automaton")
+        self.setWindowTitle("Edit Automaton")
     
-        gb = QGroupBox('Watch target (file or folder):')
+        gb = QGroupBox('Watch target (file/folder)')
         grid = QGridLayout()
+
         self.watcher_path_le = QLineEdit()
-        grid.addWidget(self.watcher_path_le, 0, 0)
+        grid.addWidget(self.watcher_path_le, 0, 0, 1,2)
         self.watcher_path_btn = QToolButton()
         self.watcher_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')) )
         self.watcher_path_btn.clicked.connect( lambda: self.onFileBrowse(self.watcher_path_le) )
-        grid.addWidget(self.watcher_path_btn, 0, 1)
+        grid.addWidget(self.watcher_path_btn, 0, 2, 1,1)
+
+        grid.addWidget(QLabel('Hold trigger'), 1, 0)
+        self.watcher_hold_sb = QSpinBox()
+        self.watcher_hold_sb.setSuffix(' secs')
+        grid.addWidget(self.watcher_hold_sb, 1, 1)
+
+
         gb.setLayout(grid)
 
         self.layout.addWidget(gb)
 
-        gb = QGroupBox('Notebook:')
+        gb = QGroupBox('IPython Notebook (*.ipynb)')
         grid = QGridLayout()
         self.notebook_path_le = QLineEdit()
-        grid.addWidget(self.notebook_path_le, 0, 0)
+        grid.addWidget(self.notebook_path_le, 0, 0, 1,2)
         self.notebook_path_btn = QToolButton()
         self.notebook_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')) )
         self.notebook_path_btn.clicked.connect( lambda: self.onFileBrowse(self.notebook_path_le) )
-        grid.addWidget(self.notebook_path_btn, 0, 1)
+        grid.addWidget(self.notebook_path_btn, 0, 2, 1,1)
         gb.setLayout(grid)
         
         self.layout.addWidget(gb)
@@ -147,22 +155,22 @@ class AutomatonListDelegate(QAbstractItemDelegate):
         else:
             painter.setPen(QPalette().text().color())
 
-        imageSpace = 10
-        if not ic.isNull():
-            # ICON
-            r = option.rect.adjusted(5, 10, -10, -10)
-            ic.paint(painter, r, Qt.AlignVCenter | Qt.AlignLeft)
-            imageSpace = 55
+        icw = QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open-sm.png') )
+        icw.paint(painter, option.rect.adjusted(10, 0, -2, -34), Qt.AlignVCenter | Qt.AlignLeft)
+        
+        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'qtipy-sm.png') )
+        icn.paint(painter, option.rect.adjusted(10, 20, -2, -34), Qt.AlignVCenter | Qt.AlignLeft)
 
-        # WATCH PATH
-        r = option.rect.adjusted(imageSpace, 5, 0, 0)
+        r = option.rect.adjusted(26, 5, 0, 0)
         pen = QPen()
         pen.setColor(QColor('black'))
+
+        # WATCH PATH
         painter.setPen(pen)
         painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignLeft, watch)
 
         # NOTEBOOK
-        r = option.rect.adjusted(imageSpace, 22, 0, 0)
+        r = option.rect.adjusted(26, 22, 0, 0)
         painter.drawText(r.left(), r.top(), r.width(), r.height(), Qt.AlignLeft, notebook)
         
 
@@ -229,11 +237,7 @@ class MainWindow(QMainWindow):
         self.menuBars = {
             'file': self.menuBar().addMenu(tr('&File')),
             'edit': self.menuBar().addMenu(tr('&Edit')),
-            #'view': self.menuBar().addMenu(tr('&View')),
-            'insert': self.menuBar().addMenu(tr('&Insert')),
-            'cell': self.menuBar().addMenu(tr('&Cell')),
-            'kernel': self.menuBar().addMenu(tr('&Kernel')),
-            'help': self.menuBar().addMenu(tr('&Help')),
+            'control': self.menuBar().addMenu(tr('&Control')),
         }        
         
         t = self.addToolBar('File')
@@ -280,13 +284,13 @@ class MainWindow(QMainWindow):
         action.setStatusTip('Enable automaton')
         action.triggered.connect( self.enable_automaton )
         t.addAction(action)
-        self.menuBars['edit'].addAction(action)
+        self.menuBars['control'].addAction(action)
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'control-pause.png')), tr('Pause'), self)
         action.setStatusTip('Pause automaton')
         action.triggered.connect( self.pause_automaton )
         t.addAction(action)
-        self.menuBars['edit'].addAction(action)
+        self.menuBars['control'].addAction(action)
 
         
         self.viewer = QListView()
@@ -315,8 +319,8 @@ class MainWindow(QMainWindow):
         '''
         automaton = Automaton()
         self.automatons.appendRow(automaton)
-        idx = self.automatons.index( self.automatons.rowCount(), 0, QModelIndex())
-        self.viewer.setCurrentIndex( idx )
+        lastitem = self.automatons.item( self.automatons.rowCount()-1 )
+        self.viewer.setCurrentIndex( lastitem.index() )
         self.edit_automaton()
         
     def edit_automaton(self):
@@ -324,12 +328,14 @@ class MainWindow(QMainWindow):
         
         
         '''
-        automaton = self.viewer.selectionModel().selectedIndexes()[0]
+        try:
+            automaton = self.automatons.itemFromIndex( self.viewer.selectionModel().currentIndex() )
+        except:
+            return
         
         dlg = AutomatonDialog(self)
         dlg.config = {}
         if dlg.exec_():
-            automaton = self.automatons.item(0)
             automaton.notebook_path = dlg.notebook_path_le.text()
             automaton.watcher_path = dlg.watcher_path_le.text()
             
