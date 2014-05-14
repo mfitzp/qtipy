@@ -645,6 +645,8 @@ class MainWindow(QMainWindow):
     def delete_automaton(self):
         '''
         '''
+        automaton = self.automatons.itemFromIndex( self.viewer.selectionModel().currentIndex() )
+        automaton.shutdown()
         automaton_idx = self.viewer.selectionModel().selectedIndexes()[0]
         self.automatons.removeRows( automaton_idx.row(), 1, QModelIndex() )
         
