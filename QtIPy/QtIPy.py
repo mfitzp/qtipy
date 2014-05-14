@@ -52,6 +52,9 @@ MODE_WATCH_FILES = 1
 MODE_WATCH_FOLDER = 2
 MODE_TIMER = 3
 
+class NotebookNotFound(Exception):
+    pass
+
 
 def mkdir_p(path):
     try:
@@ -61,6 +64,45 @@ def mkdir_p(path):
             pass
         else:
             raise
+
+class Logger(logging.Handler):
+    def __init__(self, parent, widget, out=None, color=None):
+        super(Logger, self).__init__()
+        self.m = parent
+        """(edit, out=None, color=None) -> can write stdout, stderr to a
+        QTextEdit.
+        edit = QTextEdit
+        out = alternate stream ( can be the original sys.stdout )
+        color = alternate color (i.e. color stderr a different color)
+        """
+        self.widget = widget
+        self.out = None
+        self.color = color
+
+    def emit(self, record):
+        msg = self.format(record)
+
+        item = QTreeWidgetItem()
+        item.setText(0, record.name)
+        item.setText(1, msg)
+
+        bg = {
+            logging.CRITICAL: QColor(164, 0, 0, 50),
+            logging.ERROR: QColor(239, 41, 41, 50),
+            logging.WARNING: QColor(252, 233, 79, 50),
+            logging.INFO: None,
+            logging.DEBUG: QColor(114, 159, 207, 50),
+            logging.NOTSET: None,
+        }[record.levelno]
+        if bg:
+            for c in range(3):
+                item.setBackground(c, QBrush(bg))
+
+        self.widget.addTopLevelItem(item)
+        self.widget.scrollToBottom()
+
+    def write(self, m):
+        pass
 
 
 # Generic configuration dialog handling class
@@ -262,7 +304,7 @@ class AutomatonDialog(GenericDialog):
         
     def onChangeMode(self, i):
         for m,gb in { MODE_MANUAL: self.manual_gb, MODE_WATCH_FILES: self.watchfile_gb, MODE_WATCH_FOLDER: self.watchfolder_gb, MODE_TIMER: self.timer_gb }.items():
-            if m == self.mode_options.items()[i][1]:
+            if m == list(self.mode_options.items())[i][1]:
                 gb.show()
             else:
                 gb.hide()
@@ -342,7 +384,7 @@ class AutomatonListDelegate(QAbstractItemDelegate):
 
         # LATEST RUN
         if automaton.latest_run['timestamp']:
-            r = QRect(5, 52, 200, 20)
+            r = QRect(5, 52, option.rect.width()-10, 20)
             r.translate(option.rect.x(), option.rect.y())
             painter.drawText(r, Qt.AlignLeft, "Latest run: %s" % automaton.latest_run['timestamp'].strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -464,7 +506,7 @@ class Automaton(QStandardItem):
             'version': VERSION_STRING,
         }
         
-        default_vars_and_config = dict( default_vars.items() + self.config.config.items() )
+        default_vars_and_config = dict( list( default_vars.items() ) + list( self.config.config.items() ) )
 
         if self.runner == None:
             # Postpone init to trigger for responsiveness on add/remove
@@ -490,7 +532,7 @@ class Automaton(QStandardItem):
                     'time': now.time().strftime("%H.%M.%S"),
                     'filename': f,
                 }
-                vars = dict( default_vars_and_config.items() + current_vars.items() )
+                vars = dict( list( default_vars_and_config.items() ) + list( current_vars.items() ) )
 
                 for nb_path in self.config.get('notebook_paths'):
                     nb = self.load_notebook(nb_path)
@@ -512,7 +554,7 @@ class Automaton(QStandardItem):
                         self.run_notebook(nb, vars)
                 
                     else:
-                        raise
+                        raise NotebookNotFound(nb_path)
 
         except:
             self.latest_run['success'] = False
@@ -652,14 +694,36 @@ class MainWindow(QMainWindow):
         t.addWidget(btn)
         #self.menuBars['control'].addAction(action)
 
-        
+        self.tabs = QTabWidget(self)
+        self.tabs.setTabPosition(QTabWidget.South)
+
         self.viewer = QListView()
         #self.viewer.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.viewer.setItemDelegate(AutomatonListDelegate(self.viewer))
         self.automatons = QStandardItemModel(self.viewer)
         self.viewer.setModel(self.automatons)
         
-        self.setCentralWidget( self.viewer )
+
+
+        # Initiate logging
+        self.log = QTreeWidget()
+        self.log.setColumnCount(2)
+        self.log.expandAll()
+
+        self.log.setHeaderLabels(['ID', 'Message'])
+        self.log.setUniformRowHeights(True)
+        self.log.hideColumn(0)
+
+        logHandler = Logger(self, self.log)
+        logging.getLogger().addHandler(logHandler)
+        logging.info('Welcome to QtIPy')
+
+
+        self.tabs.addTab(self.viewer,'Automatons')
+        self.tabs.addTab(self.log,'Log')
+
+        self.setCentralWidget( self.tabs )
+
 
         self.setWindowTitle("QtIPy: The data automator")
         self.statusBar().showMessage(tr('Ready'))
