@@ -14,7 +14,21 @@ Automator sets and be saved and loaded for future use.
 
 ![Screenshot](https://raw.githubusercontent.com/mfitzp/qtipy/master/qtipy-screenshot.png)
 
-Requires PyQt5. Compatible with both Python2.7 and Python3.4.
+
+# Installation
+
+QtIPy requires PyQt5. Compatible with both Python2.7 and Python3.4.
+
+Best installed via PyPi:
+
+    pip install qtipy
+    
+Then from a command line run:
+
+    QtIPy
+    
+For Mac users a `.app` is available for download from [here](http://download.martinfitzpatrick.name/QtIPy.app.zip).
 
 Backend running is based on https://github.com/paulgb/runipy/
+
 
