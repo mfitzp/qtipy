@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 setup(
 
     name='QtIPy',
-    version="0.1.6",
+    version="0.1.8",
     author='Martin Fitzpatrick',
     author_email='martin.fitzpatrick@gmail.com',
     url='https://github.com/mfitzp/qtipy',
@@ -25,7 +25,7 @@ setup(
     exclude_package_data={'': ['README.txt']},
     entry_points={
         'gui_scripts': [
-            'QtIPy = qtipy.cmd:main',
+            'QtIPy = QtIPy.cmd:main',
         ]
     },
         
