@@ -10,6 +10,12 @@ if frozen:
 else:
     logging.basicConfig(level=logging.DEBUG)
 
+try:
+    import xml.etree.cElementTree as et
+except ImportError:
+    import xml.etree.ElementTree as et
+
+
 import os
 import re
 
@@ -17,22 +23,14 @@ from .qt import *
 from . import utils
 from .translate import tr
 
-import requests
 from datetime import datetime, timedelta
-
 import traceback
-
-sys.setcheckinterval(1000)
-
-from distutils.version import StrictVersion
 
 VERSION_STRING = '0.0.1'
 
 from pyqtconfig import ConfigManager
 
 import os,sys,time
-
-from Queue import Empty
 
 try:
     from IPython.kernel import KernelManager
@@ -540,7 +538,7 @@ class MainWindow(QMainWindow):
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'disk.png')), tr('Save automatons'), self)
         action.setStatusTip('Save automatons')
-        action.triggered.connect( self.load_automatons )
+        action.triggered.connect( self.save_automatons )
         t.addAction(action)
         self.menuBars['file'].addAction(action)
 
@@ -684,13 +682,45 @@ class MainWindow(QMainWindow):
     def load_automatons(self):
         '''
         '''
-        pass
-
+        global _w
+        filename, _ = QFileDialog.getOpenFileName(_w, "Load QtIPy Automatons", '', "QtIPy Automaton File (*.qifx);;All files (*.*)")
+        if filename:
+        
+            self.automatons.clear()
+            
+            tree = et.parse(filename)
+            automatons = tree.getroot()
+        
+            for automatonx in automatons.findall('Automaton'):
+                automaton = Automaton()
+                automaton.config.setXMLConfig(automatonx)
+            
+                self.automatons.appendRow(automaton)
+                
+                if automaton.config.get('is_active'):
+                    automaton.startup()
+            
+            
     def save_automatons(self):
         '''
         '''
-        pass
-                    
+        global _w
+        filename, _ = QFileDialog.getSaveFileName(_w, "Load QtIPy Automatons", '', "QtIPy Automaton File (*.qifx);;All files (*.*)")
+        if filename:
+        
+            root = et.Element("QtIPy")
+            root.set('xmlns:mpwfml', "http://martinfitzpatrick.name/schema/QtIPy/2013a")
+
+            # Build a JSONable object representing the entire current workspace and write it to file
+            for i in range(0, self.automatons.rowCount()):
+                a = self.automatons.item(i)
+            
+                automaton = et.SubElement(root, "Automaton")
+                automaton = a.config.getXMLConfig(automaton)
+
+            tree = et.ElementTree(root)
+            tree.write(filename)  # , pretty_print=True)
+                            
     def sizeHint(self):
         return QSize(400,500)     
 
