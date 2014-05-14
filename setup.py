@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 setup(
 
     name='QtIPy',
-    version="0.1.2",
+    version="0.1.4",
     author='Martin Fitzpatrick',
     author_email='martin.fitzpatrick@gmail.com',
     url='https://github.com/mfitzp/qtipy',
@@ -32,7 +32,7 @@ setup(
         
     install_requires = [
         'pyqtconfig>=0.1',
-        'runipy>=0.1',
+        'runipy>=0.0.9',
             ],
 
     keywords='bioinformatics research analysis science',

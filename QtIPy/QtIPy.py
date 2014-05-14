@@ -833,7 +833,7 @@ class MainWindow(QMainWindow):
         '''
         '''
         global _w
-        filename, _ = QFileDialog.getSaveFileName(_w, "Load QtIPy Automatons", '', "QtIPy Automaton File (*.qifx);;All files (*.*)")
+        filename, _ = QFileDialog.getSaveFileName(_w, "Save QtIPy Automatons", '', "QtIPy Automaton File (*.qifx);;All files (*.*)")
         if filename:
         
             root = et.Element("QtIPy")
