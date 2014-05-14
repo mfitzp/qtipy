@@ -14,5 +14,7 @@ Automator sets and be saved and loaded for future use.
 
 ![Screenshot](https://raw.githubusercontent.com/mfitzp/qtipy/master/qtipy-screenshot.png)
 
+Requires PyQt5. Compatible with both Python2.7 and Python3.4.
+
 Backend running is based on https://github.com/paulgb/runipy/
 
