@@ -340,12 +340,7 @@ class AutomatonListDelegate(QAbstractItemDelegate):
         
         r = QRect(5, 4, 12, 12)
         r.translate(option.rect.x(), option.rect.y())
-        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'qtipy-sm.png') )
-        painter.drawPixmap(r, icn.pixmap(QSize(12,12)))
-
-        r = QRect(5, 20, 12, 12)
-        r.translate(option.rect.x(), option.rect.y())
-        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open-sm.png') )
+        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'document-attribute-i-sm.png') )
         painter.drawPixmap(r, icn.pixmap(QSize(12,12)))
 
         r = QRect(5, 36, 12, 12)
@@ -368,18 +363,33 @@ class AutomatonListDelegate(QAbstractItemDelegate):
         r.translate(option.rect.x(), option.rect.y())
         painter.drawText(r, Qt.AlignLeft, ";".join( automaton.config.get('notebook_paths') ))
 
+        # OUTPUT
+        r = QRect(20, 36, option.rect.width()-40, 20)
+        r.translate(option.rect.x(), option.rect.y())
+        painter.drawText(r, Qt.AlignLeft, automaton.config.get('output_path'))
+
+
         # WATCH PATH
         r = QRect(20, 20, option.rect.width()-40, 20)
         r.translate(option.rect.x(), option.rect.y())
         if automaton.config.get('mode') == MODE_WATCH_FILES:
             painter.drawText(r, Qt.AlignLeft, ";".join( automaton.config.get('watched_files') ))
-        else:
+            icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'document-copy-sm.png') )
+            
+        elif automaton.config.get('mode') == MODE_WATCH_FOLDER:
             painter.drawText(r, Qt.AlignLeft, automaton.config.get('watched_folder') )
+            icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open-sm.png') )
+            
+        elif automaton.config.get('mode') == MODE_TIMER:
+            painter.drawText(r, Qt.AlignLeft, "%s seconds(s)" % automaton.config.get('timer_seconds') )
+            icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'clock-select-sm.png') )
 
-        # OUTPUT
-        r = QRect(20, 36, option.rect.width()-40, 20)
+        elif automaton.config.get('mode') == MODE_MANUAL:
+            icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'hand-finger-sm.png') )
+
+        r = QRect(5, 20, 12, 12)
         r.translate(option.rect.x(), option.rect.y())
-        painter.drawText(r, Qt.AlignLeft, automaton.config.get('output_path'))
+        painter.drawPixmap(r, icn.pixmap(QSize(12,12)))
 
 
         # LATEST RUN
