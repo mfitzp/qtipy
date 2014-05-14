@@ -18,7 +18,7 @@ from . import utils
 from .translate import tr
 
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import traceback
 
@@ -121,22 +121,16 @@ class AutomatonDialog(GenericDialog):
         grid = QGridLayout()
         mode_cb = QComboBox()
         mode_cb.addItems( self.mode_options.keys() )
+        mode_cb.currentIndexChanged.connect(self.onChangeMode)
         self.config.add_handler('mode', mode_cb, mapper=self.mode_options)
         grid.addWidget(QLabel('Mode'), 0, 0)
         grid.addWidget(mode_cb, 0, 1)
-
-        grid.addWidget(QLabel('Hold trigger'), 1, 0)
-        watcher_hold_sb = QSpinBox()
-        watcher_hold_sb.setRange(0, 60)
-        watcher_hold_sb.setSuffix(' secs')
-        self.config.add_handler('trigger_hold', watcher_hold_sb)
-        grid.addWidget(watcher_hold_sb, 1, 1)
 
         gb.setLayout(grid)
 
         self.layout.addWidget(gb)
         
-        gb = QGroupBox('Watch target (file/folder)')
+        self.watchfile_gb = QGroupBox('Watch target (file/folder)')
         grid = QGridLayout()
 
         watched_path_le = QLineEdit()
@@ -161,13 +155,37 @@ class AutomatonDialog(GenericDialog):
         watch_window_sb.setSuffix(' secs')
         self.config.add_handler('watch_window', watch_window_sb)
         grid.addWidget(watch_window_sb, 1, 1)
+
+        grid.addWidget(QLabel('Hold trigger'), 2, 0)
+        watcher_hold_sb = QSpinBox()
+        watcher_hold_sb.setRange(0, 60)
+        watcher_hold_sb.setSuffix(' secs')
+        self.config.add_handler('trigger_hold', watcher_hold_sb)
+        grid.addWidget(watcher_hold_sb, 2, 1)
         
-        gb.setLayout(grid)
+        self.watchfile_gb.setLayout(grid)
+        self.layout.addWidget(self.watchfile_gb)
 
 
-        self.layout.addWidget(gb)
+        self.timer_gb = QGroupBox('Timer')
+        grid = QGridLayout()
+        
+        grid.addWidget(QLabel('Run every'), 0, 0)
+        watch_timer_sb = QSpinBox()
+        watch_timer_sb.setRange(0, 60)
+        watch_timer_sb.setSuffix(' secs')
+        self.config.add_handler('timer_seconds', watch_timer_sb)
+        grid.addWidget(watch_timer_sb, 0, 1)
+        
+        self.timer_gb.setLayout(grid)
+        self.layout.addWidget(self.timer_gb)
 
-
+        self.manual_gb = QGroupBox('Manual') # No show
+        grid = QGridLayout()
+        grid.addWidget(QLabel('No configuration'), 0, 0)
+        self.manual_gb.setLayout(grid)
+        self.layout.addWidget(self.manual_gb)
+        
         
         gb = QGroupBox('Output')
         grid = QGridLayout()
@@ -190,8 +208,11 @@ class AutomatonDialog(GenericDialog):
         gb.setLayout(grid)
 
         self.layout.addWidget(gb)        
-        
+
+        self.layout.addStretch()
         self.finalise()
+
+        self.onChangeMode(mode_cb.currentIndex())
         
     def onNotebookBrowse(self, t):
         global _w
@@ -210,6 +231,15 @@ class AutomatonDialog(GenericDialog):
         filenames, _ = QFileDialog.getOpenFileNames(_w, "Select file(s) to watch")
         if filenames:
             self.config.set('watched_paths',filenames)
+        
+        
+    def onChangeMode(self, i):
+        for m,gb in { MODE_MANUAL: self.manual_gb, MODE_WATCH_FILES: self.watchfile_gb, MODE_TIMER: self.timer_gb }.items():
+            if m == self.mode_options.items()[i][1]:
+                gb.show()
+            else:
+                gb.hide()
+        
         
     def sizeHint(self):
         return QSize(400,200)     
@@ -301,38 +331,63 @@ class Automaton(QStandardItem):
         
         self.setData(self, Qt.UserRole)
         self.watcher = QFileSystemWatcher()
+        self.timer = QTimer() 
+        
+        self.watch_window = {}
 
         self.latest_run = {}
         self.is_running = False
         
         self.config = ConfigManager()
         self.config.set_defaults({
-            'mode': MODE_MANUAL,
+            'mode': MODE_WATCH_FILES,
             'is_active':True,
             'trigger_hold': 5,
             'notebook_paths':'',
-            'watched_paths':[],
             'output_path': '{home}/{notebook_filename}_{datetime}_',
             'output_format': 'html',
+
+            'watched_paths':[],
+            'watch_window':15,
+
+            'timer_seconds':60,
         })
 
         self.runner = None
-        self.trigger_hold = None
+        self.lock = None
 
         self.latest_run = {
             'timestamp':None,
             'success':None,
         }
         
-        self.watcher.fileChanged.connect(self.trigger)
-        self.watcher.directoryChanged.connect(self.trigger)
+        # Set up all the triggers
+        self.watcher.fileChanged.connect(self.trigger_accumulator)
+        self.watcher.directoryChanged.connect(self.trigger_accumulator)
+        self.timer.timeout.connect(self.trigger)
         
     def startup(self):
-        pass
+        if self.config.get('mode') == MODE_TIMER:
+            self.timer.setInterval( self.config.get('timer_seconds')*1000 )
+            self.timer.start()
+            
+        elif self.config.get('mode') == MODE_WATCH_FILES:
+            current_paths = self.watcher.files() + self.watcher.directories() 
+            if current_paths:
+                self.watcher.removePaths( current_paths )
+            self.watch_window = {}
+            self.watcher.addPaths( self.config.get('watched_paths') )
         
     def shutdown(self):
-        pass
-    
+        if self.config.get('mode') == MODE_TIMER:
+            self.timer.stop()
+            
+        elif self.config.get('mode') == MODE_WATCH_FILES:
+            current_paths = self.watcher.files() + self.watcher.directories() 
+            if current_paths:
+                self.watcher.removePaths( current_paths )
+            self.watch_window = {}
+
         
     def load_notebook(self, filename):
         try:
@@ -342,16 +397,30 @@ class Automaton(QStandardItem):
             return None
         else:
             return nb
+            
+    def trigger_accumulator(self, f):
+        # Accumulate triggers from changed files: if 3 files are specified to watch
+        # we only want to fire once _all_ files have changed (within the given watch window)
+        current_time = datetime.now()
+        self.watch_window[f] = current_time # timestamp
+        self.watch_window = {k:v for k,v in self.watch_window.items() if current_time - timedelta(seconds=self.config.get('watch_window')) < v}
+        
+        if set( self.watch_window.keys() ) == set( self.watcher.files() + self.watcher.directories() ):
+            self.trigger()
 
-    def trigger(self, e):
+    def trigger(self, e=None):
         if self.config.get('is_active') == False:
             return False
         # Filesystemwatcher triggered
         # Get the file and folder information; make available in vars object for run
-        if self.trigger_hold is None:
+        if self.lock is None:
             self.is_running = True
             self.update()
-            self.trigger_hold = QTimer.singleShot(self.config.get('trigger_hold')*100, self.run);
+            if self.config.get('mode') == MODE_WATCH_FILES:
+                self.lock = QTimer.singleShot(self.config.get('trigger_hold')*1000, self.run)
+            else:
+                # Emit a timer here so the view can update (Qt Event Loop)
+                self.lock = QTimer.singleShot(5, self.run)
         
             
     def run(self, vars={}):
@@ -402,7 +471,7 @@ class Automaton(QStandardItem):
             
         finally:
             self.is_running = False
-            self.trigger_hold = None
+            self.lock = None
             self.update()
 
     def run_notebook(self, nb, vars={}):
@@ -416,7 +485,7 @@ class Automaton(QStandardItem):
             'outputs': [],
             'collapsed': False,
             'prompt_number': -1,
-            'input': 'a = "YAY!"',
+            'input': 'qtipy=%s' % vars,
             'metadata': {},
         }) )
         self.runner.nb = nb
@@ -571,10 +640,8 @@ class MainWindow(QMainWindow):
         dlg.config.set_many( automaton.config.config )
         if dlg.exec_():
             automaton.config.set_many( dlg.config.config )
-            
-            automaton.watcher.removePaths( automaton.watcher.files() + automaton.watcher.directories() )
-            automaton.watcher.addPaths( automaton.config.get('watched_paths') )
-            #automaton.load_notebook( automaton.config.get('notebook_paths') )
+            if automaton.config.get('is_active'):
+                automaton.startup()
             automaton.update()
 
     def delete_automaton(self):
