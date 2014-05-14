@@ -27,7 +27,8 @@ Then from a command line run:
 
     QtIPy
     
-For Mac users a `.app` is available for download from [here](http://download.martinfitzpatrick.name/QtIPy.app.zip).
+For Mac users a launcher `.app` is available for download from [here](http://download.martinfitzpatrick.name/QtIPy.app.zip). Install
+as above, then download the `.app` and drag to your dock. Click to launch QtIPy!
 
 Backend running is based on https://github.com/paulgb/runipy/
 
