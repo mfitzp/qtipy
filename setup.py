@@ -6,24 +6,10 @@ from copy import copy
 from setuptools import setup, find_packages
 
 
-# Defaults for py2app / cx_Freeze
-default_build_options=dict(
-    packages=[
-        'pyqtconfig',
-        'runipy',
-        ],
-    includes=[
-        ],
-    excludes=[
-        ],
-    )
-
-
-
 setup(
 
     name='QtIPy',
-    version="0.1.0",
+    version="0.1.2",
     author='Martin Fitzpatrick',
     author_email='martin.fitzpatrick@gmail.com',
     url='https://github.com/mfitzp/qtipy',
@@ -45,6 +31,8 @@ setup(
     },
         
     install_requires = [
+        'pyqtconfig>=0.1',
+        'runipy>=0.1',
             ],
 
     keywords='bioinformatics research analysis science',
