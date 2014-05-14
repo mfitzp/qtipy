@@ -38,8 +38,12 @@ setup(
     },
     exclude_package_data = { '': ['README.txt'] },
 
-    entry_points = {},
-
+    entry_points = {
+        'gui_scripts': [
+            'QtIPy = QtIPy',
+        ]
+    },
+        
     install_requires = [
             ],
 

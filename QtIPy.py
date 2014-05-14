@@ -1,4 +1,4 @@
-from QtIPy import QtIPy
+from qtipy import QtIPy
 QtIPy.main()
 
 
