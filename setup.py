@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 setup(
 
     name='QtIPy',
-    version="0.1.4",
+    version="0.1.5",
     author='Martin Fitzpatrick',
     author_email='martin.fitzpatrick@gmail.com',
     url='https://github.com/mfitzp/qtipy',
