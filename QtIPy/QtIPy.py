@@ -49,7 +49,19 @@ _w = None
 
 MODE_MANUAL = 0
 MODE_WATCH_FILES = 1
-MODE_TIMER = 2
+MODE_WATCH_FOLDER = 2
+MODE_TIMER = 3
+
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
 
 # Generic configuration dialog handling class
 class GenericDialog(QDialog):
@@ -90,7 +102,8 @@ class AutomatonDialog(GenericDialog):
     
     mode_options = {
         'Manual': MODE_MANUAL,
-        'Watch files or folders': MODE_WATCH_FILES,
+        'Watch files': MODE_WATCH_FILES,
+        'Watch folder': MODE_WATCH_FOLDER,
         'Timer': MODE_TIMER,
     }
     
@@ -124,28 +137,29 @@ class AutomatonDialog(GenericDialog):
         grid.addWidget(QLabel('Mode'), 0, 0)
         grid.addWidget(mode_cb, 0, 1)
 
+
+        grid.addWidget(QLabel('Hold trigger'), 1, 0)
+        fwatcher_hold_sb = QSpinBox()
+        fwatcher_hold_sb.setRange(0, 60)
+        fwatcher_hold_sb.setSuffix(' secs')
+        self.config.add_handler('trigger_hold', fwatcher_hold_sb)
+        grid.addWidget(fwatcher_hold_sb, 1, 1)
         gb.setLayout(grid)
 
         self.layout.addWidget(gb)
         
-        self.watchfile_gb = QGroupBox('Watch target (file/folder)')
+        self.watchfile_gb = QGroupBox('Watch files')
         grid = QGridLayout()
 
         watched_path_le = QLineEdit()
         grid.addWidget(watched_path_le, 0, 0, 1,2)
-        self.config.add_handler('watched_paths', watched_path_le, mapper=(lambda x:x.split(";"), lambda x:";".join(x)))
+        self.config.add_handler('watched_files', watched_path_le, mapper=(lambda x:x.split(";"), lambda x:";".join(x)))
         
         watched_path_btn = QToolButton()
         watched_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'document-copy.png')) )
         watched_path_btn.setStatusTip('Add file(s)')
         watched_path_btn.clicked.connect( lambda: self.onFilesBrowse(watched_path_le) )
         grid.addWidget(watched_path_btn, 0, 2, 1,1)
-
-        watched_path_btn = QToolButton()
-        watched_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')) )
-        watched_path_btn.setStatusTip('Add folder')
-        watched_path_btn.clicked.connect( lambda: self.onFolderBrowse(watched_path_le) )
-        grid.addWidget(watched_path_btn, 0, 3, 1,1)
         
         grid.addWidget(QLabel('Watch window'), 1, 0)
         watch_window_sb = QSpinBox()
@@ -153,16 +167,31 @@ class AutomatonDialog(GenericDialog):
         watch_window_sb.setSuffix(' secs')
         self.config.add_handler('watch_window', watch_window_sb)
         grid.addWidget(watch_window_sb, 1, 1)
-
-        grid.addWidget(QLabel('Hold trigger'), 2, 0)
-        watcher_hold_sb = QSpinBox()
-        watcher_hold_sb.setRange(0, 60)
-        watcher_hold_sb.setSuffix(' secs')
-        self.config.add_handler('trigger_hold', watcher_hold_sb)
-        grid.addWidget(watcher_hold_sb, 2, 1)
         
         self.watchfile_gb.setLayout(grid)
         self.layout.addWidget(self.watchfile_gb)
+        
+        self.watchfolder_gb = QGroupBox('Watch folder')
+        grid = QGridLayout()
+
+        watched_path_le = QLineEdit()
+        grid.addWidget(watched_path_le, 0, 0, 1,2)
+        self.config.add_handler('watched_folder', watched_path_le)
+        
+        watched_path_btn = QToolButton()
+        watched_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')) )
+        watched_path_btn.setStatusTip('Add folder')
+        watched_path_btn.clicked.connect( lambda: self.onFolderBrowse(watched_path_le) )
+        grid.addWidget(watched_path_btn, 0, 2, 1,1)
+
+        grid.addWidget(QLabel('Iterate files in folder'), 3, 0)
+        loop_folder_sb = QCheckBox()
+        self.config.add_handler('loop_watched_folder', loop_folder_sb)
+        grid.addWidget(loop_folder_sb, 3, 1)
+
+        
+        self.watchfolder_gb.setLayout(grid)
+        self.layout.addWidget(self.watchfolder_gb)        
 
 
         self.timer_gb = QGroupBox('Timer')
@@ -220,19 +249,19 @@ class AutomatonDialog(GenericDialog):
 
     def onFolderBrowse(self, t):
         global _w
-        filename, _ = QFileDialog.getExistingDirectory(_w, "Select folder to watch")
+        filename = QFileDialog.getExistingDirectory(_w, "Select folder to watch")
         if filename:
-            self.config.set('watched_paths',[filename])
+            self.config.set('watched_folder',filename)
 
     def onFilesBrowse(self, t):
         global _w
         filenames, _ = QFileDialog.getOpenFileNames(_w, "Select file(s) to watch")
         if filenames:
-            self.config.set('watched_paths',filenames)
+            self.config.set('watched_files',filenames)
         
         
     def onChangeMode(self, i):
-        for m,gb in { MODE_MANUAL: self.manual_gb, MODE_WATCH_FILES: self.watchfile_gb, MODE_TIMER: self.timer_gb }.items():
+        for m,gb in { MODE_MANUAL: self.manual_gb, MODE_WATCH_FILES: self.watchfile_gb, MODE_WATCH_FOLDER: self.watchfolder_gb, MODE_TIMER: self.timer_gb }.items():
             if m == self.mode_options.items()[i][1]:
                 gb.show()
             else:
@@ -300,7 +329,10 @@ class AutomatonListDelegate(QAbstractItemDelegate):
         # WATCH PATH
         r = QRect(20, 20, option.rect.width()-40, 20)
         r.translate(option.rect.x(), option.rect.y())
-        painter.drawText(r, Qt.AlignLeft, ";".join( automaton.config.get('watched_paths') ))
+        if automaton.config.get('mode') == MODE_WATCH_FILES:
+            painter.drawText(r, Qt.AlignLeft, ";".join( automaton.config.get('watched_files') ))
+        else:
+            painter.drawText(r, Qt.AlignLeft, automaton.config.get('watched_folder') )
 
         # OUTPUT
         r = QRect(20, 36, option.rect.width()-40, 20)
@@ -338,15 +370,18 @@ class Automaton(QStandardItem):
         
         self.config = ConfigManager()
         self.config.set_defaults({
-            'mode': MODE_WATCH_FILES,
+            'mode': MODE_WATCH_FOLDER,
             'is_active':True,
-            'trigger_hold': 5,
+            'trigger_hold': 1,
             'notebook_paths':'',
             'output_path': '{home}/{notebook_filename}_{datetime}_',
             'output_format': 'html',
 
-            'watched_paths':[],
+            'watched_files':[],
+            'watched_folder':'',
             'watch_window':15,
+
+            'loop_watched_folder':False,
 
             'timer_seconds':60,
         })
@@ -360,8 +395,8 @@ class Automaton(QStandardItem):
         }
         
         # Set up all the triggers
-        self.watcher.fileChanged.connect(self.trigger_accumulator)
-        self.watcher.directoryChanged.connect(self.trigger_accumulator)
+        self.watcher.fileChanged.connect(self.file_trigger_accumulator)
+        self.watcher.directoryChanged.connect(self.trigger)
         self.timer.timeout.connect(self.trigger)
         
     def startup(self):
@@ -374,13 +409,19 @@ class Automaton(QStandardItem):
             if current_paths:
                 self.watcher.removePaths( current_paths )
             self.watch_window = {}
-            self.watcher.addPaths( self.config.get('watched_paths') )
+            self.watcher.addPaths( self.config.get('watched_files') )
+
+        elif self.config.get('mode') == MODE_WATCH_FOLDER:
+            current_paths = self.watcher.files() + self.watcher.directories() 
+            if current_paths:
+                self.watcher.removePaths( current_paths )
+            self.watcher.addPath( self.config.get('watched_folder') )
         
     def shutdown(self):
         if self.config.get('mode') == MODE_TIMER:
             self.timer.stop()
             
-        elif self.config.get('mode') == MODE_WATCH_FILES:
+        elif self.config.get('mode') == MODE_WATCH_FILES or self.config.get('mode') == MODE_WATCH_FOLDER:
             current_paths = self.watcher.files() + self.watcher.directories() 
             if current_paths:
                 self.watcher.removePaths( current_paths )
@@ -396,7 +437,7 @@ class Automaton(QStandardItem):
         else:
             return nb
             
-    def trigger_accumulator(self, f):
+    def file_trigger_accumulator(self, f):
         # Accumulate triggers from changed files: if 3 files are specified to watch
         # we only want to fire once _all_ files have changed (within the given watch window)
         current_time = datetime.now()
@@ -414,59 +455,71 @@ class Automaton(QStandardItem):
         if self.lock is None:
             self.is_running = True
             self.update()
-            if self.config.get('mode') == MODE_WATCH_FILES:
-                self.lock = QTimer.singleShot(self.config.get('trigger_hold')*1000, self.run)
-            else:
-                # Emit a timer here so the view can update (Qt Event Loop)
-                self.lock = QTimer.singleShot(5, self.run)
-        
+            self.lock = QTimer.singleShot(self.config.get('trigger_hold')*1000, self.run)
             
     def run(self, vars={}):
+
         default_vars = {
             'home': os.path.expanduser('~'),
-            'datetime': datetime.now().strftime("%Y-%m-%d %H.%M.%S"),
-            'date': datetime.now().date().strftime("%Y-%m-%d"),
-            'time': datetime.now().time().strftime("%H.%M.%S"),
-            'version': VERSION_STRING
+            'version': VERSION_STRING,
         }
-
-        vars = dict( default_vars.items() + self.config.config.items() )
+        
+        default_vars_and_config = dict( default_vars.items() + self.config.config.items() )
 
         if self.runner == None:
             # Postpone init to trigger for responsiveness on add/remove
             self.runner = NotebookRunner(None, pylab=True, mpl_inline=True)
+
+        if self.config.get('mode') == MODE_WATCH_FOLDER and self.config.get('loop_watched_folder'):
+            for (dirpath, dirnames, filenames) in os.walk(self.config.get('watched_folder')):
+                break
             
+            logging.info('Watched folder contains %d files; looping' % len(filenames))
+            # Filenames contains the list of files in the folder
+        else:
+            filenames = [None]
+
         self.latest_run['timestamp'] = datetime.now()
             
         try:
-            for nb_path in self.config.get('notebook_paths'):
-                nb = self.load_notebook(nb_path)
-            
-                if nb:
-                    # Add currently running notebook path to vars
-                    vars['notebook_path'] = nb_path
-                    vars['notebook_filename'] = os.path.basename(nb_path)
+            for f in filenames:
+                now = datetime.now()
+                current_vars = {
+                    'datetime': now.strftime("%Y-%m-%d %H.%M.%S"),
+                    'date': now.date().strftime("%Y-%m-%d"),
+                    'time': now.time().strftime("%H.%M.%S"),
+                    'filename': f,
+                }
+                vars = dict( default_vars_and_config.items() + current_vars.items() )
 
-                    vars['output_path'] = self.config.get('output_path').format(**vars)
-                    parent_folder = os.path.dirname(vars['output_path'])
-                    if parent_folder:
-                        try:
-                            utils.mkdir_p(parent_folder)
-                        except: # Can't create folder
-                            self.latest_run['success'] = False
-                            raise
+                for nb_path in self.config.get('notebook_paths'):
+                    nb = self.load_notebook(nb_path)
         
-                    self.run_notebook(nb, vars)
-                    
-                else:
-                    raise
+                    if nb:
+                        # Add currently running notebook path to vars
+                        vars['notebook_path'] = nb_path
+                        vars['notebook_filename'] = os.path.basename(nb_path)
+
+                        vars['output_path'] = self.config.get('output_path').format(**vars)
+                        parent_folder = os.path.dirname(vars['output_path'])
+                        if parent_folder:
+                            try:
+                                utils.mkdir_p(parent_folder)
+                            except: # Can't create folder
+                                self.latest_run['success'] = False
+                                raise
+    
+                        self.run_notebook(nb, vars)
+                
+                    else:
+                        raise
 
         except:
             self.latest_run['success'] = False
             traceback.print_exc()
             exctype, value = sys.exc_info()[:2]
             logging.error("%s\n%s\n%s" % (exctype, value, traceback.format_exc()))
-            
+        
         finally:
             self.is_running = False
             self.lock = None
