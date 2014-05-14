@@ -5,7 +5,6 @@ from copy import copy
 
 from setuptools import setup, find_packages
 
-
 setup(
 
     name='QtIPy',
@@ -18,19 +17,19 @@ setup(
     long_description='QtIPy is a simple tool for auto-running IPython scripts on file or folder changes. Use it \
     - a simple way to automate your analysis worflows!',
 
-    packages = find_packages(),
-    include_package_data = True,
-    package_data = {
+    packages=find_packages(),
+    include_package_data=True,
+    package_data={
         'pyqti': ['*.txt', '*.rst', '*.md', 'icons/*'],
     },
-    exclude_package_data = { '': ['README.txt'] },
-    entry_points = {
+    exclude_package_data={'': ['README.txt']},
+    entry_points={
         'gui_scripts': [
             'QtIPy = qtipy.cmd:main',
         ]
     },
         
-    install_requires = [
+    install_requires=[
         'pyqtconfig>=0.1',
         'runipy>=0.0.9',
             ],
