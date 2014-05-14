@@ -18,8 +18,9 @@ from . import utils
 from .translate import tr
 
 import requests
-import subprocess
 from datetime import datetime
+
+import traceback
 
 sys.setcheckinterval(1000)
 
@@ -102,7 +103,21 @@ class AutomatonDialog(GenericDialog):
     
         self.config = ConfigManager()
 
-        gb = QGroupBox('Mode')
+        gb = QGroupBox('IPython notebook(s) (*.ipynb)')
+        grid = QGridLayout()
+        notebook_path_le = QLineEdit()
+        self.config.add_handler('notebook_paths', notebook_path_le, mapper=(lambda x:x.split(";"), lambda x:";".join(x)))
+        grid.addWidget(notebook_path_le, 0, 0, 1,2)
+
+        notebook_path_btn = QToolButton()
+        notebook_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'document-attribute-i.png')) )
+        notebook_path_btn.clicked.connect( lambda: self.onNotebookBrowse(notebook_path_le) )
+        grid.addWidget(notebook_path_btn, 0, 2, 1,1)
+        gb.setLayout(grid)
+        
+        self.layout.addWidget(gb)
+
+        gb = QGroupBox('Automaton mode')
         grid = QGridLayout()
         mode_cb = QComboBox()
         mode_cb.addItems( self.mode_options.keys() )
@@ -115,8 +130,8 @@ class AutomatonDialog(GenericDialog):
         watcher_hold_sb.setRange(0, 60)
         watcher_hold_sb.setSuffix(' secs')
         self.config.add_handler('trigger_hold', watcher_hold_sb)
-
         grid.addWidget(watcher_hold_sb, 1, 1)
+
         gb.setLayout(grid)
 
         self.layout.addWidget(gb)
@@ -126,30 +141,33 @@ class AutomatonDialog(GenericDialog):
 
         watched_path_le = QLineEdit()
         grid.addWidget(watched_path_le, 0, 0, 1,2)
-        self.config.add_handler('watched_path', watched_path_le)
+        self.config.add_handler('watched_paths', watched_path_le, mapper=(lambda x:x.split(";"), lambda x:";".join(x)))
         
         watched_path_btn = QToolButton()
-        watched_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')) )
-        watched_path_btn.clicked.connect( lambda: self.onFileBrowse(watched_path_le) )
+        watched_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'document-copy.png')) )
+        watched_path_btn.setStatusTip('Add file(s)')
+        watched_path_btn.clicked.connect( lambda: self.onFilesBrowse(watched_path_le) )
         grid.addWidget(watched_path_btn, 0, 2, 1,1)
-        gb.setLayout(grid)
 
-
-        self.layout.addWidget(gb)
-
-        gb = QGroupBox('IPython Notebook (*.ipynb)')
-        grid = QGridLayout()
-        notebook_path_le = QLineEdit()
-        self.config.add_handler('notebook_path', notebook_path_le)
-        grid.addWidget(notebook_path_le, 0, 0, 1,2)
-
-        notebook_path_btn = QToolButton()
-        notebook_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')) )
-        notebook_path_btn.clicked.connect( lambda: self.onNotebookBrowse(notebook_path_le) )
-        grid.addWidget(notebook_path_btn, 0, 2, 1,1)
-        gb.setLayout(grid)
+        watched_path_btn = QToolButton()
+        watched_path_btn.setIcon( QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')) )
+        watched_path_btn.setStatusTip('Add folder')
+        watched_path_btn.clicked.connect( lambda: self.onFolderBrowse(watched_path_le) )
+        grid.addWidget(watched_path_btn, 0, 3, 1,1)
         
+        grid.addWidget(QLabel('Watch window'), 1, 0)
+        watch_window_sb = QSpinBox()
+        watch_window_sb.setRange(0, 60)
+        watch_window_sb.setSuffix(' secs')
+        self.config.add_handler('watch_window', watch_window_sb)
+        grid.addWidget(watch_window_sb, 1, 1)
+        
+        gb.setLayout(grid)
+
+
         self.layout.addWidget(gb)
+
+
         
         gb = QGroupBox('Output')
         grid = QGridLayout()
@@ -177,21 +195,21 @@ class AutomatonDialog(GenericDialog):
         
     def onNotebookBrowse(self, t):
         global _w
-        filename, _ = QFileDialog.getOpenFileName(_w, "Load IPython notebook", '', "IPython Notebooks (*.ipynb);;All files (*.*)")
-        if filename:
-            t.setText( filename )
+        filenames, _ = QFileDialog.getOpenFileNames(_w, "Load IPython notebook(s)", '', "IPython Notebooks (*.ipynb);;All files (*.*)")
+        if filenames:
+            self.config.set('notebook_paths',filenames)
 
     def onFolderBrowse(self, t):
         global _w
         filename, _ = QFileDialog.getExistingDirectory(_w, "Select folder to watch")
         if filename:
-            t.setText( filename )
+            self.config.set('watched_paths',[filename])
 
-    def onFileBrowse(self, t):
+    def onFilesBrowse(self, t):
         global _w
-        filename, _ = QFileDialog.getOpenFileName(_w, "Select file to watch")
-        if filename:
-            t.setText( filename )
+        filenames, _ = QFileDialog.getOpenFileNames(_w, "Select file(s) to watch")
+        if filenames:
+            self.config.set('watched_paths',filenames)
         
     def sizeHint(self):
         return QSize(400,200)     
@@ -220,14 +238,15 @@ class AutomatonListDelegate(QAbstractItemDelegate):
         else:
             painter.setPen(QPalette().text().color())
 
+        
         r = QRect(5, 4, 12, 12)
         r.translate(option.rect.x(), option.rect.y())
-        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open-sm.png') )
+        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'qtipy-sm.png') )
         painter.drawPixmap(r, icn.pixmap(QSize(12,12)))
-        
+
         r = QRect(5, 20, 12, 12)
         r.translate(option.rect.x(), option.rect.y())
-        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'qtipy-sm.png') )
+        icn = QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open-sm.png') )
         painter.drawPixmap(r, icn.pixmap(QSize(12,12)))
 
         r = QRect(5, 36, 12, 12)
@@ -245,18 +264,18 @@ class AutomatonListDelegate(QAbstractItemDelegate):
 
         painter.setPen(pen)
 
-        # WATCH PATH
-        r = QRect(20, 4, 200, 20)
-        r.translate(option.rect.x(), option.rect.y())
-        painter.drawText(r, Qt.AlignLeft, automaton.config.get('watched_path'))
-
         # NOTEBOOK
-        r = QRect(20, 20, 200, 20)
+        r = QRect(20, 4, option.rect.width()-40, 20)
         r.translate(option.rect.x(), option.rect.y())
-        painter.drawText(r, Qt.AlignLeft, automaton.config.get('notebook_path'))
+        painter.drawText(r, Qt.AlignLeft, ";".join( automaton.config.get('notebook_paths') ))
+
+        # WATCH PATH
+        r = QRect(20, 20, option.rect.width()-40, 20)
+        r.translate(option.rect.x(), option.rect.y())
+        painter.drawText(r, Qt.AlignLeft, ";".join( automaton.config.get('watched_paths') ))
 
         # OUTPUT
-        r = QRect(20, 36, 200, 20)
+        r = QRect(20, 36, option.rect.width()-40, 20)
         r.translate(option.rect.x(), option.rect.y())
         painter.drawText(r, Qt.AlignLeft, automaton.config.get('output_path'))
 
@@ -283,7 +302,6 @@ class Automaton(QStandardItem):
         self.setData(self, Qt.UserRole)
         self.watcher = QFileSystemWatcher()
 
-        self.notebook = None
         self.latest_run = {}
         self.is_running = False
         
@@ -292,9 +310,9 @@ class Automaton(QStandardItem):
             'mode': MODE_MANUAL,
             'is_active':True,
             'trigger_hold': 5,
-            'notebook_path':'',
-            'watched_path':'',
-            'output_path': '{home}',
+            'notebook_paths':'',
+            'watched_paths':[],
+            'output_path': '{home}/{notebook_filename}_{datetime}_',
             'output_format': 'html',
         })
 
@@ -309,14 +327,25 @@ class Automaton(QStandardItem):
         self.watcher.fileChanged.connect(self.trigger)
         self.watcher.directoryChanged.connect(self.trigger)
         
+    def startup(self):
+        pass
+        
+    def shutdown(self):
+        pass
+    
+        
     def load_notebook(self, filename):
-        with open(filename) as f:
-            nb = reads(f.read(), 'json')
-
-        if nb:
-            self.notebook = nb   
+        try:
+            with open(filename) as f:
+                nb = reads(f.read(), 'json')
+        except:
+            return None
+        else:
+            return nb
 
     def trigger(self, e):
+        if self.config.get('is_active') == False:
+            return False
         # Filesystemwatcher triggered
         # Get the file and folder information; make available in vars object for run
         if self.trigger_hold is None:
@@ -328,23 +357,58 @@ class Automaton(QStandardItem):
     def run(self, vars={}):
         default_vars = {
             'home': os.path.expanduser('~'),
-            'datetime': datetime.now(),
-            'date': datetime.now().date(),
-            'time': datetime.now().time(),
+            'datetime': datetime.now().strftime("%Y-%m-%d %H.%M.%S"),
+            'date': datetime.now().date().strftime("%Y-%m-%d"),
+            'time': datetime.now().time().strftime("%H.%M.%S"),
             'version': VERSION_STRING
         }
 
         vars = dict( default_vars.items() + self.config.config.items() )
-        vars['output_path'] = self.config.get('output_path').format(**vars)
 
         if self.runner == None:
             # Postpone init to trigger for responsiveness on add/remove
             self.runner = NotebookRunner(None, pylab=True, mpl_inline=True)
             
-        self.run_notebook(self.notebook, vars)
-        self.trigger_hold = None
+        self.latest_run['timestamp'] = datetime.now()
+            
+        try:
+            for nb_path in self.config.get('notebook_paths'):
+                nb = self.load_notebook(nb_path)
+            
+                if nb:
+                    # Add currently running notebook path to vars
+                    vars['notebook_path'] = nb_path
+                    vars['notebook_filename'] = os.path.basename(nb_path)
+
+                    vars['output_path'] = self.config.get('output_path').format(**vars)
+                    parent_folder = os.path.dirname(vars['output_path'])
+                    if parent_folder:
+                        try:
+                            utils.mkdir_p(parent_folder)
+                        except: # Can't create folder
+                            self.latest_run['success'] = False
+                            raise
+        
+                    self.run_notebook(nb, vars)
+                    
+                else:
+                    raise
+
+        except:
+            self.latest_run['success'] = False
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            logging.error("%s\n%s\n%s" % (exctype, value, traceback.format_exc()))
+            
+        finally:
+            self.is_running = False
+            self.trigger_hold = None
+            self.update()
 
     def run_notebook(self, nb, vars={}):
+        if len(nb['worksheets'])==0:
+            nb['worksheets']=[NotebookNode({'cells':[], 'metadata':{}})]
+
         start = nb['worksheets'][0]['cells']
         start.insert(0, Struct(**{
             'cell_type': 'code',
@@ -357,14 +421,14 @@ class Automaton(QStandardItem):
         }) )
         self.runner.nb = nb
 
-        self.latest_run['timestamp'] = datetime.now()
         try:
             self.runner.run_notebook()
         except:
             self.latest_run['success'] = False
+            raise
         else:
             self.latest_run['success'] = True
-            
+           
         ext = dict(
             html='html',
             slides='slides',
@@ -375,11 +439,11 @@ class Automaton(QStandardItem):
         )
             
         output, resources = IPyexport(IPyexporter_map[self.config.get('output_format')], self.runner.nb)
-        with open(os.path.join(vars['output_path'], 'output.%s' % ext[self.config.get('output_format')]),"w") as f:
+        output_path = vars['output_path'] + 'notebook.%s' % ext[self.config.get('output_format')]
+        logging.info("Exporting updated notebook to %s" % output_path)
+        with open(output_path,"w") as f:
             f.write(output)
             
-        self.is_running = False
-        self.update()
 
     def update(self):
         global _w
@@ -420,7 +484,7 @@ class MainWindow(QMainWindow):
         t.addAction(action)
         self.menuBars['edit'].addAction(action)
 
-        action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'edit-diff.png')), tr('Edit automaton'), self)
+        action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'property.png')), tr('Edit automaton'), self)
         action.setStatusTip('Edit automaton')
         action.triggered.connect( self.edit_automaton )
         t.addAction(action)
@@ -502,14 +566,15 @@ class MainWindow(QMainWindow):
         except:
             return
         
+        automaton.shutdown()
         dlg = AutomatonDialog(self)
         dlg.config.set_many( automaton.config.config )
         if dlg.exec_():
             automaton.config.set_many( dlg.config.config )
             
             automaton.watcher.removePaths( automaton.watcher.files() + automaton.watcher.directories() )
-            automaton.watcher.addPath( automaton.config.get('watched_path') )
-            automaton.load_notebook( automaton.config.get('notebook_path') )
+            automaton.watcher.addPaths( automaton.config.get('watched_paths') )
+            #automaton.load_notebook( automaton.config.get('notebook_paths') )
             automaton.update()
 
     def delete_automaton(self):
@@ -526,6 +591,7 @@ class MainWindow(QMainWindow):
         except:
             return
         automaton.config.set('is_active', True)
+        automaton.startup()
         automaton.update()
 
     def pause_automaton(self):
@@ -536,6 +602,7 @@ class MainWindow(QMainWindow):
         except:
             return
         automaton.config.set('is_active', False)
+        automaton.shutdown()
         automaton.update()
 
     def run_automaton(self):
