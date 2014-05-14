@@ -10,6 +10,7 @@ from setuptools import setup, find_packages
 default_build_options=dict(
     packages=[
         'pyqtconfig',
+        'runipy',
         ],
     includes=[
         ],
@@ -22,7 +23,7 @@ default_build_options=dict(
 setup(
 
     name='QtIPy',
-    version="0.1",
+    version="0.1.0",
     author='Martin Fitzpatrick',
     author_email='martin.fitzpatrick@gmail.com',
     url='https://github.com/mfitzp/qtipy',
@@ -34,13 +35,12 @@ setup(
     packages = find_packages(),
     include_package_data = True,
     package_data = {
-        '': ['*.txt', '*.rst', '*.md'],
+        'pyqti': ['*.txt', '*.rst', '*.md', 'icons/*'],
     },
     exclude_package_data = { '': ['README.txt'] },
-
     entry_points = {
         'gui_scripts': [
-            'QtIPy = QtIPy',
+            'QtIPy = qtipy.cmd:main',
         ]
     },
         

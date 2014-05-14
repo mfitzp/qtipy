@@ -531,12 +531,14 @@ class MainWindow(QMainWindow):
         t.setIconSize(QSize(16, 16))
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')), tr('Load automatons'), self)
+        action.setShortcut( QKeySequence.Open )
         action.setStatusTip('Load automatons')
         action.triggered.connect( self.load_automatons )
         t.addAction(action)
         self.menuBars['file'].addAction(action)
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'disk.png')), tr('Save automatons'), self)
+        action.setShortcut( QKeySequence.Save )
         action.setStatusTip('Save automatons')
         action.triggered.connect( self.save_automatons )
         t.addAction(action)
@@ -546,6 +548,7 @@ class MainWindow(QMainWindow):
         t.setIconSize(QSize(16, 16))
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'plus-circle.png')), tr('Add automaton'), self)
+        action.setShortcut( QKeySequence.New )
         action.setStatusTip('Add new automaton')
         action.triggered.connect( self.add_new_automaton )
         t.addAction(action)
@@ -559,6 +562,7 @@ class MainWindow(QMainWindow):
 
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'cross.png')), tr('Delete automaton'), self)
+        action.setShortcut( QKeySequence.Delete )
         action.setStatusTip('Delete automaton')
         action.triggered.connect( self.delete_automaton )
         t.addAction(action)
@@ -568,12 +572,14 @@ class MainWindow(QMainWindow):
         t.setIconSize(QSize(16, 16))
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'control.png')), tr('Enable'), self)
+        action.setShortcut(tr("Ctrl+E"));
         action.setStatusTip('Enable automaton')
         action.triggered.connect( self.enable_automaton )
         t.addAction(action)
         self.menuBars['control'].addAction(action)
 
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'control-pause.png')), tr('Pause'), self)
+        action.setShortcut(tr("Ctrl+W"));
         action.setStatusTip('Pause automaton')
         action.triggered.connect( self.pause_automaton )
         t.addAction(action)
@@ -584,6 +590,7 @@ class MainWindow(QMainWindow):
 
         btn = QToolButton(self)
         action = QAction(QIcon(os.path.join(utils.scriptdir, 'icons', 'play.png')), tr('Run now'), self)
+        action.setShortcut(tr("Ctrl+R"));
         btn.setText(tr('Run now'))
         btn.setStatusTip('Run now...')
         btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
@@ -645,10 +652,12 @@ class MainWindow(QMainWindow):
     def delete_automaton(self):
         '''
         '''
-        automaton = self.automatons.itemFromIndex( self.viewer.selectionModel().currentIndex() )
-        automaton.shutdown()
-        automaton_idx = self.viewer.selectionModel().selectedIndexes()[0]
-        self.automatons.removeRows( automaton_idx.row(), 1, QModelIndex() )
+        _btn = QMessageBox.question(self, "Confirm delete", "Are you sure you want to delete this automaton?")
+        if _btn == QMessageBox.Yes:
+            automaton = self.automatons.itemFromIndex( self.viewer.selectionModel().currentIndex() )
+            automaton.shutdown()
+            automaton_idx = self.viewer.selectionModel().selectedIndexes()[0]
+            self.automatons.removeRows( automaton_idx.row(), 1, QModelIndex() )
         
     def enable_automaton(self):
         '''
