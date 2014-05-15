@@ -83,25 +83,22 @@ class Logger(logging.Handler):
     def emit(self, record):
         msg = self.format(record)
 
-        item = QTreeWidgetItem()
-        item.setText(0, record.name)
-        item.setText(1, msg)
-
-        bg = {
+        color = {
             logging.CRITICAL: QColor(164, 0, 0, 50),
             logging.ERROR: QColor(239, 41, 41, 50),
             logging.WARNING: QColor(252, 233, 79, 50),
-            logging.INFO: None,
+            logging.INFO: QColor(0, 0, 0, 255),
             logging.DEBUG: QColor(114, 159, 207, 50),
-            logging.NOTSET: None,
+            logging.NOTSET: QColor(0, 0, 0, 255),
         }[record.levelno]
-        if bg:
-            for c in range(3):
-                item.setBackground(c, QBrush(bg))
 
-        self.widget.addTopLevelItem(item)
-        self.widget.scrollToBottom()
-
+        rows = self.widget._current_rows
+        if rows:
+            rows = rows[-50:]
+        rows.append('<div style="color:%s;">%s</div>' % ( color.name(), msg.replace('\n','<br />') ) )
+        self.widget._current_rows = rows
+        self.widget.setHtml('<html><body>' + '\n\n\n'.join(rows) + '</body></html>')
+        
     def write(self, m):
         pass
 
@@ -216,19 +213,23 @@ class AutomatonDialog(GenericDialog):
         grid = QGridLayout()
 
         watched_path_le = QLineEdit()
-        grid.addWidget(watched_path_le, 0, 0, 1, 2)
+        grid.addWidget(watched_path_le, 0, 0, 1, 3)
         self.config.add_handler('watched_folder', watched_path_le)
 
         watched_path_btn = QToolButton()
         watched_path_btn.setIcon(QIcon(os.path.join(utils.scriptdir, 'icons', 'folder-horizontal-open.png')))
         watched_path_btn.setStatusTip('Add folder')
         watched_path_btn.clicked.connect(lambda: self.onFolderBrowse(watched_path_le))
-        grid.addWidget(watched_path_btn, 0, 2, 1, 1)
+        grid.addWidget(watched_path_btn, 0, 3, 1, 1)
 
         grid.addWidget(QLabel('Iterate files in folder'), 3, 0)
         loop_folder_sb = QCheckBox()
-        self.config.add_handler('loop_watched_folder', loop_folder_sb)
+        self.config.add_handler('iterate_watched_folder', loop_folder_sb)
         grid.addWidget(loop_folder_sb, 3, 1)
+
+        loop_wildcard_le = QLineEdit()
+        self.config.add_handler('iterate_wildcard', loop_wildcard_le)
+        grid.addWidget(loop_wildcard_le, 3, 2)
 
         self.watchfolder_gb.setLayout(grid)
         self.layout.addWidget(self.watchfolder_gb)
@@ -421,7 +422,8 @@ class Automaton(QStandardItem):
             'watched_folder': '',
             'watch_window': 15,
 
-            'loop_watched_folder': False,
+            'iterate_watched_folder': True,
+            'iterate_wildcard': '.csv',
 
             'timer_seconds': 60,
         })
@@ -440,6 +442,9 @@ class Automaton(QStandardItem):
         self.timer.timeout.connect(self.trigger)
 
     def startup(self):
+        if self.config.get('is_active') == False:
+            return False
+    
         if self.config.get('mode') == MODE_TIMER:
             self.timer.setInterval(self.config.get('timer_seconds') * 1000)
             self.timer.start()
@@ -495,6 +500,8 @@ class Automaton(QStandardItem):
             self.is_running = True
             self.update()
             self.lock = QTimer.singleShot(self.config.get('trigger_hold') * 1000, self.run)
+            # Shutdown so we don't get in infinite loops
+            self.shutdown()
 
     def run(self, vars={}):
 
@@ -509,10 +516,11 @@ class Automaton(QStandardItem):
             # Postpone init to trigger for responsiveness on add/remove
             self.runner = NotebookRunner(None, pylab=True, mpl_inline=True)
 
-        if self.config.get('mode') == MODE_WATCH_FOLDER and self.config.get('loop_watched_folder'):
+        if self.config.get('mode') == MODE_WATCH_FOLDER and self.config.get('iterate_watched_folder'):
             for (dirpath, dirnames, filenames) in os.walk(self.config.get('watched_folder')):
                 break
 
+            filenames = [f for f in filenames if self.config.get('iterate_wildcard') in f]
             logging.info('Watched folder contains %d files; looping' % len(filenames))
             # Filenames contains the list of files in the folder
         else:
@@ -563,6 +571,8 @@ class Automaton(QStandardItem):
             self.is_running = False
             self.lock = None
             self.update()
+            # Restart
+            self.startup()            
 
     def run_notebook(self, nb, vars={}):
         if len(nb['worksheets']) == 0:
@@ -703,13 +713,9 @@ class MainWindow(QMainWindow):
         self.viewer.setModel(self.automatons)
 
         # Initiate logging
-        self.log = QTreeWidget()
-        self.log.setColumnCount(2)
-        self.log.expandAll()
-
-        self.log.setHeaderLabels(['ID', 'Message'])
-        self.log.setUniformRowHeights(True)
-        self.log.hideColumn(0)
+        self.log = QTextEdit()
+        self.log._current_rows = []
+        self.log.setReadOnly(True)
 
         logHandler = Logger(self, self.log)
         logging.getLogger().addHandler(logHandler)
@@ -819,9 +825,7 @@ class MainWindow(QMainWindow):
                 automaton.config.setXMLConfig(automatonx)
 
                 self.automatons.appendRow(automaton)
-
-                if automaton.config.get('is_active'):
-                    automaton.startup()
+                automaton.startup()
             
     def save_automatons(self):
         '''
