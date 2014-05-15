@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 setup(
 
     name='QtIPy',
-    version="0.1.8",
+    version="0.1.9",
     author='Martin Fitzpatrick',
     author_email='martin.fitzpatrick@gmail.com',
     url='https://github.com/mfitzp/qtipy',
