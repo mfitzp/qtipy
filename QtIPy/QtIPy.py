@@ -95,7 +95,7 @@ class Logger(logging.Handler):
         rows = self.widget._current_rows
         if rows:
             rows = rows[-50:]
-        rows.append('<div style="color:%s;">%s</div>' % ( color.name(), msg.replace('\n','<br />') ) )
+        rows.append('<pre style="color:%s;">%s</pre>' % ( color.name(), msg.replace('\n','<br />') ) )
         self.widget._current_rows = rows
         self.widget.setHtml('<html><body>' + '\n\n\n'.join(rows) + '</body></html>')
         
@@ -597,21 +597,21 @@ class Automaton(QStandardItem):
             raise
         else:
             self.latest_run['success'] = True
+        finally:
+            ext = dict(
+                html='html',
+                slides='slides',
+                latex='latex',
+                markdown='md',
+                python='py',
+                rst='rst',
+            )
 
-        ext = dict(
-            html='html',
-            slides='slides',
-            latex='latex',
-            markdown='md',
-            python='py',
-            rst='rst',
-        )
-
-        output, resources = IPyexport(IPyexporter_map[self.config.get('output_format')], self.runner.nb)
-        output_path = vars['output_path'] + 'notebook.%s' % ext[self.config.get('output_format')]
-        logging.info("Exporting updated notebook to %s" % output_path)
-        with open(output_path, "w") as f:
-            f.write(output)
+            output, resources = IPyexport(IPyexporter_map[self.config.get('output_format')], self.runner.nb)
+            output_path = vars['output_path'] + 'notebook.%s' % ext[self.config.get('output_format')]
+            logging.info("Exporting updated notebook to %s" % output_path)
+            with open(output_path, "w") as f:
+                f.write(output)
 
     def update(self):
         global _w

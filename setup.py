@@ -8,7 +8,7 @@ from setuptools import setup, find_packages
 setup(
 
     name='QtIPy',
-    version="0.1.9",
+    version="0.1.11",
     author='Martin Fitzpatrick',
     author_email='martin.fitzpatrick@gmail.com',
     url='https://github.com/mfitzp/qtipy',
@@ -20,7 +20,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        'pyqti': ['*.txt', '*.rst', '*.md', 'icons/*'],
+        'QtIPy': ['*.txt', '*.rst', '*.md', 'icons/*'],
     },
     exclude_package_data={'': ['README.txt']},
     entry_points={
